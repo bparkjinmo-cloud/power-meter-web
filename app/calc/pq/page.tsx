@@ -17,7 +17,7 @@ export default function PqCalc() {
 
   return (
     <CalcLayout title="전력품질(PQ) 계산">
-      <NumberField label="기본파 RMS" value={fund} />
+      <NumberField label="기본파 RMS" value={fund} onChange={setFund} />
       <NumberField label="5차 고조파 RMS" value={h5} onChange={setH5} />
       <NumberField label="7차 고조파 RMS" value={h7} onChange={setH7} />
 
