@@ -24,9 +24,17 @@ export default function Home() {
       </div>
 
       <div>
-        <label>R2 (Ω): </label>
-        <input type="number" value={r2} onChange={e => setR2(Number(e.target.value))} />
+        <label>R2 (Ω): {r2}</label>
+        <input
+          type="range"
+          min="100"
+          max="5000"
+          step="100"
+          value={r2}
+          onChange={e => setR2(Number(e.target.value))}
+        />
       </div>
+
 
       <h2>Vout = {vout.toFixed(2)} V</h2>
     </div>
