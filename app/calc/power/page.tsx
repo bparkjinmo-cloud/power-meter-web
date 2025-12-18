@@ -6,225 +6,211 @@ import { NumberField } from "../../components/NumberField";
 
 type PhaseMode = "single" | "three";
 
+/* 퍼센트 표시 헬퍼 */
 function pct(x: number): string {
   if (!Number.isFinite(x)) return "—";
   return x.toFixed(2) + " %";
 }
 
 export default function PowerCalc() {
-  const [mode, setMode] = useState<PhaseMode>("single");
+  /* ---------- 구성 ---------- */
+  const [mode, setMode] = useState<PhaseMode>("three");
 
-  // Single-phase inputs
-  const [vrms, setVrms] = useState(220);
-  const [irms, setIrms] = useState(10);
+  /* ---------- 단상 ---------- */
+  const [v, setV] = useState(220);
+  const [i, setI] = useState(10);
   const [pf, setPf] = useState(0.9);
 
-  // Three-phase inputs (per-phase)
-  const [va, setVa] = useState(220);
-  const [vb, setVb] = useState(220);
-  const [vc, setVc] = useState(220);
-  const [ia, setIa] = useState(10);
-  const [ib, setIb] = useState(10);
-  const [ic, setIc] = useState(10);
-  const [pfa, setPfa] = useState(0.9);
-  const [pfb, setPfb] = useState(0.9);
-  const [pfc, setPfc] = useState(0.9);
+  /* ---------- 삼상 RST ---------- */
+  const [vr, setVr] = useState(220);
+  const [vs, setVs] = useState(220);
+  const [vt, setVt] = useState(220);
 
-  // Harmonic correction (very simplified)
-  const [thdI, setThdI] = useState(0); // % current THD
-  const [thdV, setThdV] = useState(0); // % voltage THD
+  const [ir, setIr] = useState(10);
+  const [is_, setIs] = useState(10);
+  const [it, setIt] = useState(10);
+
+  const [pfr, setPfr] = useState(0.9);
+  const [pfs, setPfs] = useState(0.9);
+  const [pft, setPft] = useState(0.9);
+
+  /* ---------- 전력품질(간이) ---------- */
+  const [thdV, setThdV] = useState(0); // %
+  const [thdI, setThdI] = useState(0); // %
   const [hours, setHours] = useState(24);
 
   const res = useMemo(() => {
-    let p: number;
-    let q: number;
-    let s: number;
+    /* 보수 보정 계수 (비정현파 간이 모델) */
+    const k = 0.03;
+    const penalty =
+      1 - k * ((thdV / 100) ** 2 + (thdI / 100) ** 2);
+    const penaltyClamped = penalty < 0.8 ? 0.8 : penalty;
 
-    let pa: number;
-    let pb: number;
-    let pc: number;
-    let qa: number;
-    let qb: number;
-    let qc: number;
-    let sa: number;
-    let sb: number;
-    let sc: number;
-
-    let vAvg: number;
-    let iAvg: number;
-    let vImb: number;
-    let iImb: number;
-
-    let energyKwh: number;
-
-    // Harmonic penalty factor (conservative heuristic)
-    // This is NOT a standards-grade true-power calc; it discourages using fundamental-only formulas under high THD.
-    const k = 0.03; // conservative penalty coefficient
-    const thdIpu = thdI / 100;
-    const thdVpu = thdV / 100;
-    const penalty = 1 - k * (thdIpu * thdIpu + thdVpu * thdVpu);
-    const penaltyClamped = penalty < 0.8 ? 0.8 : penalty; // don't over-penalize below 0.8 in this simple model
-
+    /* ---------- 단상 ---------- */
     if (mode === "single") {
-      s = vrms * irms;
-      p = s * pf;
-      q = Math.sqrt(Math.max(0, s * s - p * p));
+      const s = v * i;
+      const p = s * pf;
+      const q = Math.sqrt(Math.max(0, s * s - p * p));
 
-      // apply penalty as “true-power caution”
       const pAdj = p * penaltyClamped;
-      const qAdj = q; // q handling in nonsinusoidal is more complex; keep basic
-      const sAdj = s;
-
-      energyKwh = (pAdj * hours) / 1000;
+      const energy = (pAdj * hours) / 1000;
 
       return {
         mode,
-        pFund: p,
-        qFund: q,
-        sFund: s,
+        p,
+        q,
+        s,
         pAdj,
-        qAdj,
-        sAdj,
-        energyKwh,
+        energy,
         vImb: NaN,
         iImb: NaN,
         note:
-          (thdI > 0 || thdV > 0)
-            ? "THD 입력이 0이 아니면 ‘기본식 기반 전력’을 보수적으로 감쇠해 표시합니다(간이 모델)."
-            : "정현파 가정 기본식 결과입니다.",
+          thdV > 0 || thdI > 0
+            ? "THD 입력에 따라 유효전력을 보수적으로 감쇠했습니다."
+            : "정현파 가정 기본 계산입니다.",
       };
     }
 
-    sa = va * ia;
-    sb = vb * ib;
-    sc = vc * ic;
+    /* ---------- 삼상 RST ---------- */
+    const sr = vr * ir;
+    const ss = vs * is_;
+    const st = vt * it;
 
-    pa = sa * pfa;
-    pb = sb * pfb;
-    pc = sc * pfc;
+    const pr = sr * pfr;
+    const ps = ss * pfs;
+    const pt = st * pft;
 
-    qa = Math.sqrt(Math.max(0, sa * sa - pa * pa));
-    qb = Math.sqrt(Math.max(0, sb * sb - pb * pb));
-    qc = Math.sqrt(Math.max(0, sc * sc - pc * pc));
+    const qr = Math.sqrt(Math.max(0, sr * sr - pr * pr));
+    const qs = Math.sqrt(Math.max(0, ss * ss - ps * ps));
+    const qt = Math.sqrt(Math.max(0, st * st - pt * pt));
 
-    s = sa + sb + sc;
-    p = pa + pb + pc;
-    q = qa + qb + qc;
+    const s = sr + ss + st;
+    const p = pr + ps + pt;
+    const q = qr + qs + qt;
 
-    vAvg = (va + vb + vc) / 3;
-    iAvg = (ia + ib + ic) / 3;
+    const pAdj = p * penaltyClamped;
+    const energy = (pAdj * hours) / 1000;
 
-    // simple imbalance metric: max deviation / average
-    vImb = vAvg !== 0 ? (Math.max(Math.abs(va - vAvg), Math.abs(vb - vAvg), Math.abs(vc - vAvg)) / vAvg) * 100 : NaN;
-    iImb = iAvg !== 0 ? (Math.max(Math.abs(ia - iAvg), Math.abs(ib - iAvg), Math.abs(ic - iAvg)) / iAvg) * 100 : NaN;
+    /* ---------- 불평형 ---------- */
+    const vAvg = (vr + vs + vt) / 3;
+    const iAvg = (ir + is_ + it) / 3;
 
-    const pAdj3 = p * penaltyClamped;
-    energyKwh = (pAdj3 * hours) / 1000;
+    const vImb =
+      vAvg > 0
+        ? (Math.max(
+            Math.abs(vr - vAvg),
+            Math.abs(vs - vAvg),
+            Math.abs(vt - vAvg)
+          ) /
+            vAvg) *
+          100
+        : NaN;
+
+    const iImb =
+      iAvg > 0
+        ? (Math.max(
+            Math.abs(ir - iAvg),
+            Math.abs(is_ - iAvg),
+            Math.abs(it - iAvg)
+          ) /
+            iAvg) *
+          100
+        : NaN;
 
     return {
       mode,
-      pFund: p,
-      qFund: q,
-      sFund: s,
-      pAdj: pAdj3,
-      qAdj: q,
-      sAdj: s,
-      energyKwh,
+      p,
+      q,
+      s,
+      pAdj,
+      energy,
       vImb,
       iImb,
       note:
-        (thdI > 0 || thdV > 0)
-          ? "비정현파(THD) 입력이 있으면 ‘기본식 기반 전력’을 보수적으로 감쇠해 표시합니다(간이 모델)."
-          : "정현파 가정의 상별 합산 결과입니다.",
+        thdV > 0 || thdI > 0
+          ? "THD 입력에 따라 유효전력을 보수적으로 감쇠했습니다."
+          : "정현파 가정 상별 합산 결과입니다.",
     };
   }, [
     mode,
-    vrms,
-    irms,
+    v,
+    i,
     pf,
-    va,
-    vb,
-    vc,
-    ia,
-    ib,
-    ic,
-    pfa,
-    pfb,
-    pfc,
-    thdI,
+    vr,
+    vs,
+    vt,
+    ir,
+    is_,
+    it,
+    pfr,
+    pfs,
+    pft,
     thdV,
+    thdI,
     hours,
   ]);
 
   return (
     <CalcLayout
-      title="전력 / 에너지 계산 (단상/삼상 + 간이 PQ 보정)"
-      desc="정현파 기본식 + 불평형 지표 + THD 입력 시 보수 감쇠(간이 모델). 정밀 PQ 전력은 측정 알고리즘(샘플 기반)으로 계산해야 합니다."
+      title="전력 / 에너지 계산 (RST)"
+      desc="한국 전력 시스템(60Hz) 기준. 불평형 및 비정현파(간이 보정) 포함."
     >
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ fontWeight: 600, display: "block", marginBottom: 6 }}>구성</label>
-        <select value={mode} onChange={(e) => setMode(e.target.value as PhaseMode)} style={{ padding: 8 }}>
-          <option value="single">단상</option>
-          <option value="three">삼상(상별 입력)</option>
-        </select>
-      </div>
+      <label>구성</label>
+      <select
+        value={mode}
+        onChange={(e) => setMode(e.target.value as PhaseMode)}
+      >
+        <option value="single">단상</option>
+        <option value="three">삼상 (R/S/T)</option>
+      </select>
 
       {mode === "single" ? (
         <>
-          <NumberField label="Vrms" unit="V" value={vrms} onChange={setVrms} />
-          <NumberField label="Irms" unit="A" value={irms} onChange={setIrms} />
-          <NumberField label="PF" value={pf} step={0.01} min={-1} max={1} onChange={setPf} />
+          <NumberField label="V" unit="V" value={v} onChange={setV} />
+          <NumberField label="I" unit="A" value={i} onChange={setI} />
+          <NumberField label="PF" value={pf} onChange={setPf} />
         </>
       ) : (
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <div>
-            <h4 style={{ marginTop: 0 }}>A상</h4>
-            <NumberField label="Va" unit="V" value={va} onChange={setVa} />
-            <NumberField label="Ia" unit="A" value={ia} onChange={setIa} />
-            <NumberField label="PFa" value={pfa} step={0.01} min={-1} max={1} onChange={setPfa} />
-          </div>
-          <div>
-            <h4 style={{ marginTop: 0 }}>B상</h4>
-            <NumberField label="Vb" unit="V" value={vb} onChange={setVb} />
-            <NumberField label="Ib" unit="A" value={ib} onChange={setIb} />
-            <NumberField label="PFb" value={pfb} step={0.01} min={-1} max={1} onChange={setPfb} />
-          </div>
-          <div>
-            <h4 style={{ marginTop: 0 }}>C상</h4>
-            <NumberField label="Vc" unit="V" value={vc} onChange={setVc} />
-            <NumberField label="Ic" unit="A" value={ic} onChange={setIc} />
-            <NumberField label="PFc" value={pfc} step={0.01} min={-1} max={1} onChange={setPfc} />
-          </div>
-        </div>
+        <>
+          <h4>R상</h4>
+          <NumberField label="Vr" unit="V" value={vr} onChange={setVr} />
+          <NumberField label="Ir" unit="A" value={ir} onChange={setIr} />
+          <NumberField label="PF_r" value={pfr} onChange={setPfr} />
+
+          <h4>S상</h4>
+          <NumberField label="Vs" unit="V" value={vs} onChange={setVs} />
+          <NumberField label="Is" unit="A" value={is_} onChange={setIs} />
+          <NumberField label="PF_s" value={pfs} onChange={setPfs} />
+
+          <h4>T상</h4>
+          <NumberField label="Vt" unit="V" value={vt} onChange={setVt} />
+          <NumberField label="It" unit="A" value={it} onChange={setIt} />
+          <NumberField label="PF_t" value={pft} onChange={setPft} />
+        </>
       )}
 
       <hr />
 
-      <NumberField label="전류 THD" unit="%" value={thdI} step={0.1} min={0} onChange={setThdI} />
-      <NumberField label="전압 THD" unit="%" value={thdV} step={0.1} min={0} onChange={setThdV} />
+      <NumberField label="전압 THD" unit="%" value={thdV} onChange={setThdV} />
+      <NumberField label="전류 THD" unit="%" value={thdI} onChange={setThdI} />
       <NumberField label="사용 시간" unit="h" value={hours} onChange={setHours} />
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginTop: 16 }}>
-        <h3 style={{ marginTop: 0 }}>결과</h3>
-        <p><b>P(기본식)</b>: {res.pFund.toFixed(2)} W</p>
-        <p><b>Q(기본식)</b>: {res.qFund.toFixed(2)} var</p>
-        <p><b>S(기본식)</b>: {res.sFund.toFixed(2)} VA</p>
+      <hr />
 
-        <hr />
+      <p><b>P</b>: {res.p.toFixed(2)} W</p>
+      <p><b>Q</b>: {res.q.toFixed(2)} var</p>
+      <p><b>S</b>: {res.s.toFixed(2)} VA</p>
+      <p><b>P(보수)</b>: {res.pAdj.toFixed(2)} W</p>
+      <p><b>에너지</b>: {res.energy.toFixed(3)} kWh</p>
 
-        <p><b>P(보수 보정)</b>: {res.pAdj.toFixed(2)} W</p>
-        <p><b>에너지</b>: {res.energyKwh.toFixed(4)} kWh</p>
+      {mode === "three" && (
+        <>
+          <p><b>전압 불평형</b>: {pct(res.vImb)}</p>
+          <p><b>전류 불평형</b>: {pct(res.iImb)}</p>
+        </>
+      )}
 
-        {res.mode === "three" ? (
-          <>
-            <hr />
-            <p><b>전압 불평형(간이)</b>: {pct(res.vImb)}</p>
-            <p><b>전류 불평형(간이)</b>: {pct(res.iImb)}</p>
-          </>
-        ) : null}
-
-        <p style={{ color: "#666", marginTop: 12 }}>{res.note}</p>
-      </div>
+      <p style={{ color: "#666" }}>{res.note}</p>
     </CalcLayout>
   );
 }
