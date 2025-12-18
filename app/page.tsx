@@ -1,42 +1,19 @@
-'use client';
-
-import { useState } from 'react';
+import Link from 'next/link';
 
 export default function Home() {
-  const [vin, setVin] = useState(10);
-  const [r1, setR1] = useState(1000);
-  const [r2, setR2] = useState(1000);
-
-  const vout = vin * r2 / (r1 + r2);
-
   return (
-    <div style={{ padding: 20 }}>
-      <h1>분압 회로 계산기</h1>
+    <div style={{ padding: 30 }}>
+      <h1>전력계측 계산 도구</h1>
 
-      <div>
-        <label>Vin (V): </label>
-        <input type="number" value={vin} onChange={e => setVin(Number(e.target.value))} />
-      </div>
-
-      <div>
-        <label>R1 (Ω): </label>
-        <input type="number" value={r1} onChange={e => setR1(Number(e.target.value))} />
-      </div>
-
-      <div>
-        <label>R2 (Ω): {r2}</label>
-        <input
-          type="range"
-          min="100"
-          max="5000"
-          step="100"
-          value={r2}
-          onChange={e => setR2(Number(e.target.value))}
-        />
-      </div>
-
-
-      <h2>Vout = {vout.toFixed(2)} V</h2>
+      <ul>
+        <li><Link href="/opamp">OP-AMP 배율 계산</Link></li>
+        <li><Link href="/scaling">전류·전압 계측 스케일링</Link></li>
+        <li><Link href="/ct">CT 계산</Link></li>
+        <li><Link href="/power">전력 / 에너지 계산</Link></li>
+        <li><Link href="/protection">보호·임계값 계산</Link></li>
+        <li><Link href="/pq">전력품질(PQ) 계산</Link></li>
+        <li><Link href="/installation">설치·현장 보정 계산</Link></li>
+      </ul>
     </div>
   );
 }
